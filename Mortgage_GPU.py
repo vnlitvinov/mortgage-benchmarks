@@ -340,44 +340,19 @@ def last_mile_cleaning(df, **kwargs):
 
 
 def main():
-    # mortgage_path, count_quarter_processing = read_input_parameters()
-    
-    # acq_data_path = mortgage_path + "/acq"
-    # perf_data_path = mortgage_path + "/perf"
-    # col_names_path = mortgage_path + "/names.csv"
-    # TODO check existing files
-
     # end_year = 2016 # end_year is inclusive
     # part_count = 16 # the number of data files to train against
     # gpu_time = 0
 
     gpu_dfs = []
-    quarter = 1
-    year = 2000
     perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
-    for _ in range(count_quarter_processing):
-        file = perf_format_path % (str(year), str(quarter))
+    for quarter in range(1, count_quarter_processing + 1):
+        year = 2000 + quarter // 4
+        file = perf_format_path % (str(year), str(quarter % 4))
         gpu_dfs.append(
-            run_gpu_workflow(year=year, quarter=quarter, perf_file=file)
+            run_gpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
         )
-        quarter += 1
-        if quarter == 5:
-            year += 1
-            quarter = 1
 
-
-'''def read_input_parameters():
-    # to download data for this script,
-    # visit https://rapidsai.github.io/demos/datasets/mortgage-data
-    # and update the following paths accordingly
-    if len(sys.argv) != 3:
-        raise ValueError("needed to point path to mortgage folder "
-                         "and count quarter to processing")
-    else:
-        import sys
-        mortgage_path = sys.argv[1]
-        count_quarter_processing = int(sys.argv[2])
-'''
 
 if __name__ == '__main__':
     main()
