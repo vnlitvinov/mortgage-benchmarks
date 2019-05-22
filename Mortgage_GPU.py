@@ -1,5 +1,7 @@
 import sys
+import time
 import numpy as np
+import xgboost as xgb
 import cudf
 from cudf.dataframe import DataFrame
 from collections import OrderedDict
@@ -346,12 +348,52 @@ def main():
 
     gpu_dfs = []
     perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
+
+    # ETL stage ##############################################################
+    time_ETL = time.time()
     for quarter in range(1, count_quarter_processing + 1):
         year = 2000 + quarter // 4
         file = perf_format_path % (str(year), str(quarter % 4))
         gpu_dfs.append(
             run_gpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
         )
+    print("ETL time: ", time.time() - time_ETL)
+    ##########################################################################
+    dxgb_gpu_params = {
+        'nround':            100,
+        'max_depth':         8,
+        'max_leaves':        2**8,
+        'alpha':             0.9,
+        'eta':               0.1,
+        'gamma':             0.1,
+        'learning_rate':     0.1,
+        'subsample':         1,
+        'reg_lambda':        1,
+        'scale_pos_weight':  2,
+        'min_child_weight':  30,
+        'tree_method':       'gpu_hist',
+        'n_gpus':            1,
+        # 'distributed_dask':  True,
+        'loss':              'ls',
+        'objective':         'gpu:reg:linear',
+        'max_features':      'auto',
+        'criterion':         'friedman_mse',
+        'grow_policy':       'lossguide',
+        'verbose':           True
+    }
+
+    #gpu_dfs = [(gpu_df[['delinquency_12']],
+    #            gpu_df[gpu_df.columns.difference(['delinquency_12'])])
+    #            for gpu_df in gpu_dfs]
+
+    gpu_dfs = [DataFrame.from_arrow(gpu_df) for gpu_df in gpu_dfs]
+    print(gpu_dfs[0])
+    print(gpu_dfs[0]["delinquency_12"])
+    gpu_dfs = [xgb.DMatrix(gpu_df["delinquency_12"],
+                           gpu_df["delinquency_12"]) for gpu_df in gpu_dfs]
+
+    # need to see on documentation
+    bst = xgb.train(dxgb_gpu_params, gpu_dfs[0], num_boost_round=dxgb_gpu_params['nround'])
 
 
 if __name__ == '__main__':
