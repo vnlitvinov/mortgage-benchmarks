@@ -10,3 +10,9 @@ Based on [benchmarks published by NVidia for theri RAPIDS](https://render.github
 conda create -n cudf_dev  -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
     cudf=0.7 python=3.6 cudatoolkit=9.2
 ```
+
+# Getting dataset
+
+wget http://rapidsai-data.s3-website.us-east-2.amazonaws.com/notebook-mortgage-data/mortgage_2000-2001.tgz
+
+tar -xzvf mortgage_2000-2001.tgz
