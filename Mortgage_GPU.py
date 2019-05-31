@@ -1,10 +1,19 @@
 import sys
 import time
 import numpy as np
+import dask_xgboost as dxgb_gpu
+import dask
+import dask_cudf
+from dask_cuda import LocalCUDACluster
+from dask.delayed import delayed
+from dask.distributed import Client, wait
 import xgboost as xgb
 import cudf
 from cudf.dataframe import DataFrame
 from collections import OrderedDict
+import gc
+from glob import glob
+import os
 
 
 # to download data for this script,
@@ -16,10 +25,42 @@ if len(sys.argv) != 3:
 else:
     mortgage_path = sys.argv[1]
     count_quarter_processing = int(sys.argv[2])
-    
+
 acq_data_path = mortgage_path + "/acq"
 perf_data_path = mortgage_path + "/perf"
 col_names_path = mortgage_path + "/names.csv"
+
+
+def initialize_rmm_pool():
+    from librmm_cffi import librmm_config as rmm_cfg
+
+    rmm_cfg.use_pool_allocator = True
+    #rmm_cfg.initial_pool_size = 2<<30 # set to 2GiB. Default is 1/2 total GPU memory
+    import cudf
+    return cudf._gdf.rmm_initialize()
+
+
+def initialize_rmm_no_pool():
+    from librmm_cffi import librmm_config as rmm_cfg
+
+    rmm_cfg.use_pool_allocator = False
+    import cudf
+    return cudf._gdf.rmm_initialize()
+
+
+def run_dask_task(func, **kwargs):
+    task = func(**kwargs)
+    return task
+
+
+def process_quarter_gpu(client, year=2000, quarter=1, perf_file=""):
+    ml_arrays = run_dask_task(delayed(run_gpu_workflow),
+                                          quarter=quarter,
+                                          year=year,
+                                          perf_file=perf_file)
+    return client.compute(ml_arrays,
+                          optimize_graph=False,
+                          fifo_timeout="0ms")
 
 
 def null_workaround(df, **kwargs):
@@ -340,11 +381,19 @@ def last_mile_cleaning(df, **kwargs):
         df[column] = df[column].fillna(np.dtype(str(df[column].dtype)).type(-1))
     return df.to_arrow(preserve_index=False)
 
+import dask.dataframe as dd
+
 
 def main():
     # end_year = 2016 # end_year is inclusive
     # part_count = 16 # the number of data files to train against
     # gpu_time = 0
+
+    # create cluster on local machine
+    cluster = LocalCUDACluster()
+    client = Client(cluster)
+
+    # client.run(initialize_rmm_pool)
 
     gpu_dfs = []
     perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
@@ -355,10 +404,17 @@ def main():
         year = 2000 + quarter // 4
         file = perf_format_path % (str(year), str(quarter % 4))
         gpu_dfs.append(
-            run_gpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
-        )
+            process_quarter_gpu(client, year=year, quarter=(quarter % 4), perf_file=file))
+
+    wait(gpu_dfs)
+
+    # client.run(cudf._gdf.rmm_finalize)
+    # client.run(initialize_rmm_no_pool)
+
     print("ETL time: ", time.time() - time_ETL)
-    ##########################################################################
+
+    # Machine Learning #######################################################
+
     dxgb_gpu_params = {
         'nround':            100,
         'max_depth':         8,
@@ -373,7 +429,7 @@ def main():
         'min_child_weight':  30,
         'tree_method':       'gpu_hist',
         'n_gpus':            1,
-        # 'distributed_dask':  True,
+        'distributed_dask':  True,
         'loss':              'ls',
         'objective':         'gpu:reg:linear',
         'max_features':      'auto',
@@ -382,19 +438,39 @@ def main():
         'verbose':           True
     }
 
-    gpu_dfs = [DataFrame.from_arrow(gpu_df) for gpu_df in gpu_dfs]
-    print(gpu_dfs[0])
-    print(gpu_dfs[0]["delinquency_12"])
-    #gpu_dfs = [xgb.DMatrix(gpu_df["delinquency_12"],
-    #                       gpu_df["delinquency_12"]) for gpu_df in gpu_dfs]
 
-    pd_df = gpu_dfs[0].to_pandas()
-    y = pd_df["delinquency_12"]
-    x = pd_df.drop(["delinquency_12"], axis=1)
-    pd_df = xgb.DMatrix(x, y)
-    # need to see on documentation
-    bst = xgb.train(dxgb_gpu_params, pd_df, num_boost_round=dxgb_gpu_params['nround'])
+    gpu_dfs = [delayed(DataFrame.from_arrow)(gpu_df)
+               for gpu_df in gpu_dfs[:count_quarter_processing]]
+    gpu_dfs = [gpu_df for gpu_df in gpu_dfs]
+    wait(gpu_dfs)
 
+    tmp_map = [(gpu_df, list(client.who_has(gpu_df).values())[0]) for gpu_df in gpu_dfs]
+    new_map = {}
+    for key, value in tmp_map:
+        if value not in new_map:
+            new_map[value] = [key]
+        else:
+            new_map[value].append(key)
+
+    del(tmp_map)
+    gpu_dfs = []
+    for list_delayed in new_map.values():
+        gpu_dfs.append(delayed(cudf.concat)(list_delayed))
+
+    del(new_map)
+    gpu_dfs = [(gpu_df[['delinquency_12']], gpu_df[delayed(list)(gpu_df.columns.difference(['delinquency_12']))]) for gpu_df in gpu_dfs]
+    gpu_dfs = [(gpu_df[0].persist(), gpu_df[1].persist()) for gpu_df in gpu_dfs]
+
+    # failed now
+    gpu_dfs = [dask.delayed(xgb.DMatrix)(gpu_df[1], gpu_df[0]) for gpu_df in gpu_dfs]
+
+    gpu_dfs = [gpu_df.persist() for gpu_df in gpu_dfs]
+    gc.collect()
+    wait(gpu_dfs)
+
+    labels = None
+    bst = dxgb_gpu.train(client, dxgb_gpu_params, gpu_dfs, labels,
+                         num_boost_round=dxgb_gpu_params['nround'])
 
 if __name__ == '__main__':
     main()
