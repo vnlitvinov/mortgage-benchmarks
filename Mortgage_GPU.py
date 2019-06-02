@@ -383,16 +383,14 @@ def main():
     }
 
     gpu_dfs = [DataFrame.from_arrow(gpu_df) for gpu_df in gpu_dfs]
-    print(gpu_dfs[0])
-    print(gpu_dfs[0]["delinquency_12"])
-    #gpu_dfs = [xgb.DMatrix(gpu_df["delinquency_12"],
-    #                       gpu_df["delinquency_12"]) for gpu_df in gpu_dfs]
 
     pd_df = gpu_dfs[0].to_pandas()
+
     y = pd_df["delinquency_12"]
     x = pd_df.drop(["delinquency_12"], axis=1)
+
     pd_df = xgb.DMatrix(x, y)
-    # need to see on documentation
+
     bst = xgb.train(dxgb_gpu_params, pd_df, num_boost_round=dxgb_gpu_params['nround'])
 
 
