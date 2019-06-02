@@ -357,7 +357,9 @@ def main():
         gpu_dfs.append(
             run_gpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
         )
-    print("ETL time: ", time.time() - time_ETL)
+
+    time_ETL_end = time.time()
+    print("ETL time: ", time_ETL_end - time_ETL)
     ##########################################################################
     dxgb_gpu_params = {
         'nround':            100,
@@ -392,6 +394,8 @@ def main():
     pd_df = xgb.DMatrix(x, y)
 
     bst = xgb.train(dxgb_gpu_params, pd_df, num_boost_round=dxgb_gpu_params['nround'])
+    time_ML_train_end = time.time()
+    print("Machine learning - train: ", time_ML_train_end - time_ETL_end)
 
 
 if __name__ == '__main__':
