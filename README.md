@@ -15,7 +15,3 @@ Based on [benchmarks published by NVidia for theri RAPIDS](https://render.github
 - `conda activate cudf_dev`
 - `pip install xgboost`
 - `time python Mortgage_GPU.py  test_mortgage_gpu/dataset/ 1`
-
-# Results for one quarter
-- ETL time:  8.85 sec.
-- Machine learning - train:  35.13 sec.
