@@ -25,7 +25,7 @@ col_names_path = mortgage_path + "/names.csv"
 def null_workaround(df, **kwargs):
     for column, data_type in df.dtypes.items():
         if str(data_type) == "category":
-            df[column] = df[column].astype('int32').fillna(-1)
+            df[column] = df[column].cat.codes
         if str(data_type) in ['int8', 'int16', 'int32', 'int64', 'float32', 'float64']:
             df[column] = df[column].fillna(np.dtype(data_type).type(-1))
     return df
@@ -62,6 +62,13 @@ def run_cpu_workflow(quarter=1, year=2000, perf_file="", **kwargs):
     final_gdf = last_mile_cleaning(final_gdf)
     return final_gdf
 
+def _parse_dtyped_csv(fname, dtypes, **kw):
+    all_but_dates = {col: valtype for (col, valtype) in dtypes.items()
+                     if valtype != 'datetime64'}
+    dates_only = [col for (col, valtype) in dtypes.items()
+                     if valtype == 'datetime64']
+
+    return pd.read_csv(fname, dtype=all_but_dates, parse_dates=dates_only, **kw)
 
 def cpu_load_performance_csv(performance_path, **kwargs):
     """ Loads performance data
@@ -85,22 +92,22 @@ def cpu_load_performance_csv(performance_path, **kwargs):
     
     dtypes = OrderedDict([
         ("loan_id", "int64"),
-        ("monthly_reporting_period", "date"),
+        ("monthly_reporting_period", "datetime64"),
         ("servicer", "category"),
         ("interest_rate", "float64"),
         ("current_actual_upb", "float64"),
         ("loan_age", "float64"),
         ("remaining_months_to_legal_maturity", "float64"),
         ("adj_remaining_months_to_maturity", "float64"),
-        ("maturity_date", "date"),
+        ("maturity_date", "datetime64"),
         ("msa", "float64"),
         ("current_loan_delinquency_status", "int32"),
         ("mod_flag", "category"),
         ("zero_balance_code", "category"),
-        ("zero_balance_effective_date", "date"),
-        ("last_paid_installment_date", "date"),
-        ("foreclosed_after", "date"),
-        ("disposition_date", "date"),
+        ("zero_balance_effective_date", "datetime64"),
+        ("last_paid_installment_date", "datetime64"),
+        ("foreclosed_after", "datetime64"),
+        ("disposition_date", "datetime64"),
         ("foreclosure_costs", "float64"),
         ("prop_preservation_and_repair_costs", "float64"),
         ("asset_recovery_costs", "float64"),
@@ -119,8 +126,7 @@ def cpu_load_performance_csv(performance_path, **kwargs):
 
     print(performance_path)
     
-    return pd.read_csv(performance_path, names=cols, delimiter='|',
-                       parse_dates=[col for (col, valtype) in dtypes.items() if valtype == 'date'])
+    return _parse_dtyped_csv(performance_path, dtypes, names=cols, delimiter='|')
 
 
 def cpu_load_acquisition_csv(acquisition_path, **kwargs):
@@ -141,34 +147,33 @@ def cpu_load_acquisition_csv(acquisition_path, **kwargs):
     
     dtypes = OrderedDict([
         ("loan_id", "int64"),
-        ("orig_channel", "object"),
-        ("seller_name", "object"),
+        ("orig_channel", "category"),
+        ("seller_name", "category"),
         ("orig_interest_rate", "float64"),
         ("orig_upb", "int64"),
         ("orig_loan_term", "int64"),
-        ("orig_date", "date"),
-        ("first_pay_date", "date"),
+        ("orig_date", "datetime64"),
+        ("first_pay_date", "datetime64"),
         ("orig_ltv", "float64"),
         ("orig_cltv", "float64"),
         ("num_borrowers", "float64"),
         ("dti", "float64"),
         ("borrower_credit_score", "float64"),
-        ("first_home_buyer", "object"),
-        ("loan_purpose", "object"),
-        ("property_type", "object"),
+        ("first_home_buyer", "category"),
+        ("loan_purpose", "category"),
+        ("property_type", "category"),
         ("num_units", "int64"),
-        ("occupancy_status", "object"),
-        ("property_state", "object"),
+        ("occupancy_status", "category"),
+        ("property_state", "category"),
         ("zip", "int64"),
         ("mortgage_insurance_percent", "float64"),
-        ("product_type", "object"),
+        ("product_type", "category"),
         ("coborrow_credit_score", "float64"),
         ("mortgage_insurance_type", "float64"),
-        ("relocation_mortgage_indicator", "object")
+        ("relocation_mortgage_indicator", "category")
     ]) 
     print(acquisition_path)
-    return pd.read_csv(acquisition_path, names=cols, delimiter='|',
-                         parse_dates=['orig_date', 'first_pay_date'], index_col=False)
+    return _parse_dtyped_csv(acquisition_path, dtypes, names=cols, delimiter='|', index_col=False)
 
 
 def pd_load_names(**kwargs):
@@ -323,7 +328,7 @@ def last_mile_cleaning(df, **kwargs):
     drop_list = [
         'loan_id', 'orig_date', 'first_pay_date', 'seller_name',
         'monthly_reporting_period', 'last_paid_installment_date', 'maturity_date', 'ever_30', 'ever_90', 'ever_180',
-        'delinquency_30', 'delinquency_90', 'delinquency_180', #'upb_12',
+        'delinquency_30', 'delinquency_90', 'delinquency_180', 'upb_12',
         'zero_balance_effective_date','foreclosed_after', 'disposition_date','timestamp'
     ]
     for column in drop_list:
