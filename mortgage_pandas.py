@@ -1,6 +1,9 @@
 import sys
+import time
 import numpy as np
+#import xgboost as xgb
 import pandas as pd
+import daal4py
 from collections import OrderedDict
 
 
@@ -341,14 +344,69 @@ def main():
     # part_count = 16 # the number of data files to train against
     # gpu_time = 0
 
-    gpu_dfs = []
+    pd_dfs = []
     perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
+
+    time_ETL = time.time()
     for quarter in range(1, count_quarter_processing + 1):
         year = 2000 + quarter // 4
         file = perf_format_path % (str(year), str(quarter % 4))
-        gpu_dfs.append(
+        pd_dfs.append(
             run_cpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
         )
+    time_ETL_end = time.time()
+    print("ETL time: ", time_ETL_end - time_ETL)
+
+    ##########################################################################
+    '''
+    dxgb_cpu_params = {
+        'nround':            100,
+        'max_depth':         8,
+        'max_leaves':        2**8,
+        'alpha':             0.9,
+        'eta':               0.1,
+        'gamma':             0.1,
+        'learning_rate':     0.1,
+        'subsample':         1,
+        'reg_lambda':        1,
+        'scale_pos_weight':  2,
+        'min_child_weight':  30,
+        'tree_method':       'hist',
+        #n_gpus':            1,
+        # 'distributed_dask':  True,
+        'loss':              'ls',
+        'objective':         'reg:linear',
+        'max_features':      'auto',
+        'criterion':         'friedman_mse',
+        'grow_policy':       'lossguide',
+        'verbose':           True
+    }
+    '''
+    dxgb_daal_params = {
+		'fptype':                       'float',
+		'maxIterations':                100,
+		'maxTreeDepth':                 8,
+		'minSplitLoss':                 0.1,
+		'shrinkage':                    0.1,
+		'observationsPerTreeFraction':  1,
+		'lambda_':                      1,
+		'minObservationsInLeafNode':    1,
+		'maxBins':                      256,
+		'featuresPerNode':              0,
+		'minBinSize':                   5,
+		'memorySavingMode':             False,
+	}
+
+
+    pd_df = pd_dfs[0]
+    y = np.ascontiguousarray(pd_df["delinquency_12"], dtype=np.float32).reshape(len(pd_df), 1)
+    x = np.ascontiguousarray(pd_df.drop(["delinquency_12"], axis=1), dtype=np.float32)
+
+    train_algo = daal4py.gbt_regression_training(**dxgb_daal_params)
+    train_result = train_algo.compute(x, y)
+    time_ML_train_end = time.time()
+    print("Machine learning - train: ", time_ML_train_end - time_ETL_end)
+
 
 
 if __name__ == '__main__':
