@@ -1,7 +1,7 @@
 import sys
 import time
 import numpy as np
-#import xgboost as xgb
+import xgboost as xgb
 import pandas as pd
 import daal4py
 from collections import OrderedDict
@@ -10,12 +10,13 @@ from collections import OrderedDict
 # to download data for this script,
 # visit https://rapidsai.github.io/demos/datasets/mortgage-data
 # and update the following paths accordingly
-if len(sys.argv) != 3:
-    raise ValueError("needed to point path to mortgage folder "
-                     "and count quarter to processing")
+if len(sys.argv) != 4:
+    raise ValueError("needed to point path to mortgage folder, "
+                     "count quarter to process and ML framework")
 else:
     mortgage_path = sys.argv[1]
     count_quarter_processing = int(sys.argv[2])
+    ml_fw = sys.argv[3]
     
 acq_data_path = mortgage_path + "/acq"
 perf_data_path = mortgage_path + "/perf"
@@ -344,26 +345,32 @@ def last_mile_cleaning(df, **kwargs):
     return df
 
 
-def main():
-    # end_year = 2016 # end_year is inclusive
-    # part_count = 16 # the number of data files to train against
-    # gpu_time = 0
+def train_daal(pd_df):
+    dxgb_daal_params = {
+		'fptype':                       'float',
+		'maxIterations':                100,
+		'maxTreeDepth':                 8,
+		'minSplitLoss':                 0.1,
+		'shrinkage':                    0.1,
+		'observationsPerTreeFraction':  1,
+		'lambda_':                      1,
+		'minObservationsInLeafNode':    1,
+		'maxBins':                      256,
+		'featuresPerNode':              0,
+		'minBinSize':                   5,
+		'memorySavingMode':             False,
+	}
 
-    pd_dfs = []
-    perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
 
-    time_ETL = time.time()
-    for quarter in range(1, count_quarter_processing + 1):
-        year = 2000 + quarter // 4
-        file = perf_format_path % (str(year), str(quarter % 4))
-        pd_dfs.append(
-            run_cpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
-        )
-    time_ETL_end = time.time()
-    print("ETL time: ", time_ETL_end - time_ETL)
+    y = np.ascontiguousarray(pd_df["delinquency_12"], dtype=np.float32).reshape(len(pd_df), 1)
+    x = np.ascontiguousarray(pd_df.drop(["delinquency_12"], axis=1), dtype=np.float32)
 
-    ##########################################################################
-    '''
+    train_algo = daal4py.gbt_regression_training(**dxgb_daal_params)
+    train_result = train_algo.compute(x, y)
+    return train_result
+
+
+def train_xgb(pd_df):
     dxgb_cpu_params = {
         'nround':            100,
         'max_depth':         8,
@@ -386,29 +393,45 @@ def main():
         'grow_policy':       'lossguide',
         'verbose':           True
     }
-    '''
-    dxgb_daal_params = {
-		'fptype':                       'float',
-		'maxIterations':                100,
-		'maxTreeDepth':                 8,
-		'minSplitLoss':                 0.1,
-		'shrinkage':                    0.1,
-		'observationsPerTreeFraction':  1,
-		'lambda_':                      1,
-		'minObservationsInLeafNode':    1,
-		'maxBins':                      256,
-		'featuresPerNode':              0,
-		'minBinSize':                   5,
-		'memorySavingMode':             False,
-	}
+    y = pd_df['delinquency_12']
+    x = pd_df.drop(['delinquency_12'], axis=1)
+    dtrain = xgb.DMatrix(x, y)
+    model_xgb = xgb.train(dxgb_cpu_params, dtrain,
+                          num_boost_round=dxgb_cpu_params['nround'])
+    return model_xgb
 
 
+ML_FWS = {
+    'xgb': train_xgb,
+    'daal': train_daal
+}
+
+
+def main():
+    # end_year = 2016 # end_year is inclusive
+    # part_count = 16 # the number of data files to train against
+    # gpu_time = 0
+    try:
+        ml_func = ML_FWS[ml_fw]
+    except KeyError:
+        sys.exit('Unsupported ML framework, known are: %s' % ', '.join(ML_FWS))
+
+    pd_dfs = []
+    perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
+
+    time_ETL = time.time()
+    for quarter in range(1, count_quarter_processing + 1):
+        year = 2000 + quarter // 4
+        file = perf_format_path % (str(year), str(quarter % 4))
+        pd_dfs.append(
+            run_cpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
+        )
+    time_ETL_end = time.time()
+    print("ETL time: ", time_ETL_end - time_ETL)
+
+    ##########################################################################
     pd_df = pd_dfs[0]
-    y = np.ascontiguousarray(pd_df["delinquency_12"], dtype=np.float32).reshape(len(pd_df), 1)
-    x = np.ascontiguousarray(pd_df.drop(["delinquency_12"], axis=1), dtype=np.float32)
-
-    train_algo = daal4py.gbt_regression_training(**dxgb_daal_params)
-    train_result = train_algo.compute(x, y)
+    ml_func(pd_df)
     time_ML_train_end = time.time()
     print("Machine learning - train: ", time_ML_train_end - time_ETL_end)
 
