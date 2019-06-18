@@ -14,18 +14,19 @@ function create_dir {
     echo ""
 }
 
+
 # constants
 TEST_FOLDER="$(pwd)/test_mortgage_gpu"
-DATASET_FOLDER="$(pwd)/mortgage_dataset"
+DATASET_FOLDER="$TEST_FOLDER/mortgage_dataset"
 DATASET_LINK="http://rapidsai-data.s3-website.us-east-2.amazonaws.com/notebook-mortgage-data/mortgage_2000-2001.tgz"
-DATASET_NAME="$(DATASET_FOLDER)/mortgage_2000-2001.tgz"
+DATASET_NAME="$DATASET_FOLDER/mortgage_2000-2001.tgz"
 
 
 create_dir $TEST_FOLDER
 cd $TEST_FOLDER
 
 
-if [[ ! -x "$(command -v conda)" ]]; then
+if [[ ! "$(command -v conda)" ]]; then
     echo "conda command wasn't found in the PATH; attemp to install miniconda"
     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
     bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda
