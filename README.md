@@ -5,14 +5,20 @@ Based on [benchmarks published by NVidia for their RAPIDS](https://render.github
 
 # Run benchmarks
 
-## GPU case
-- launch `p3.2xlarge` gpu instance on AWS cloud (this instance has a NVIDIA V100 GPU)
+## GPU case (while pandas 0.24 is used; not working now)
+- launch `p3.2xlarge` gpu instance on AWS cloud with `Ubuntu Server 18.04 LTS (HVM), SSD Volume Type` image (this instance has a NVIDIA V100 GPU)
 - login in it
 - follow [the steps](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#Cluster_GPUs_Manual_Install_Driver) to install the necessary driver for V100 GPU (using 396.82 version)
-- `git clone https://github.com/vnlitvin/mortgage-benchmarks.git`
-- `cd mortgage-benchmarks`
-- `chmod +x test_mortgage_gpu.sh && ./test_mortgage_gpu.sh`
-- `bash`
-- `conda activate cudf_dev`
-- `pip install xgboost`
+- `git clone https://github.com/vnlitvin/mortgage-benchmarks.git && cd mortgage-benchmarks`
+- `git checkout amyachev`
+- `chmod +x run_gpu.sh && . ./run_gpu.sh`
 - `time python Mortgage_GPU.py  test_mortgage_gpu/dataset/ 1`
+
+## CPU case (while pandas 0.24 is used)
+- launch `c5.18xlarge` cpu instance on AWS cloud with `Ubuntu Server 18.04 LTS (HVM), SSD Volume Type` image
+- login in it
+- `git clone https://github.com/vnlitvin/mortgage-benchmarks.git && cd mortgage-benchmarks`
+- `git checkout amyachev`
+- `chmod +x run_cpu.sh && . ./run_cpu.sh`
+- `time python mortgage_pandas.py test_mortgage_gpu/mortgage_dataset/ 1 daal` or
+  `time python mortgage_pandas.py test_mortgage_gpu/mortgage_dataset/ 1 xgb`
