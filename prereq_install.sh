@@ -32,6 +32,8 @@ if [[ ! "$(command -v conda)" ]]; then
     bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda
     rm Miniconda3-latest-Linux-x86_64.sh
     export PATH="$HOME/miniconda/bin:$PATH"
+    conda init bash
+    source ~/.bashrc
     echo "conda installed"
 else
     echo "conda command was found in the PATH"
@@ -52,3 +54,4 @@ else
     echo "$DATASET_NAME file was found"
 fi
 cd ../..
+
