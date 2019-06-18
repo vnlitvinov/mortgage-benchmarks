@@ -5,7 +5,10 @@ import xgboost as xgb
 import pandas as pd
 import daal4py
 from collections import OrderedDict
+from pandas.core.dtypes.dtypes import CategoricalDtype
 
+
+dt64_fill = np.dtype('datetime64[ns]').type('1970-01-01').astype('datetime64[ns]')
 
 # to download data for this script,
 # visit https://rapidsai.github.io/demos/datasets/mortgage-data
@@ -17,24 +20,28 @@ else:
     mortgage_path = sys.argv[1]
     count_quarter_processing = int(sys.argv[2])
     ml_fw = sys.argv[3]
+
     
 acq_data_path = mortgage_path + "/acq"
 perf_data_path = mortgage_path + "/perf"
 col_names_path = mortgage_path + "/names.csv"
 
 
-def null_workaround(df, **kwargs):
+def null_workaround(df):#, **kwargs):
+    return df
+    '''
     for column, data_type in df.dtypes.items():
         if str(data_type) == "category":
             df[column] = df[column].cat.codes
         if str(data_type) in ['int8', 'int16', 'int32', 'int64', 'float32', 'float64']:
             df[column] = df[column].fillna(np.dtype(data_type).type(-1))
     return df
+    '''
 
 
-def run_cpu_workflow(quarter=1, year=2000, perf_file="", **kwargs):
+def run_cpu_workflow(quarter=1, year=2000, perf_file=""):#, **kwargs):
     names = pd_load_names()
-    acq_gdf = cpu_load_acquisition_csv(acquisition_path= acq_data_path + "/Acquisition_"
+    acq_gdf = cpu_load_acquisition_csv(acq_data_path + "/Acquisition_"
                                       + str(year) + "Q" + str(quarter) + ".txt")
     acq_gdf = acq_gdf.merge(names, how='left', on=['seller_name'])
     acq_gdf = acq_gdf.drop(['seller_name'], axis=1)
@@ -46,32 +53,25 @@ def run_cpu_workflow(quarter=1, year=2000, perf_file="", **kwargs):
     everdf = create_ever_features(gdf)
     delinq_merge = create_delinq_features(gdf)
     everdf = join_ever_delinq_features(everdf, delinq_merge)
-    del(delinq_merge)
+    #del(delinq_merge)
 
     joined_df = create_joined_df(gdf, everdf)
     testdf = create_12_mon_features(joined_df)
     joined_df = combine_joined_12_mon(joined_df, testdf)
-    del(testdf)
+    #del(testdf)
 
     perf_df = final_performance_delinquency(gdf, joined_df)
-    del(gdf, joined_df)
+    #del(gdf, joined_df)
 
     final_gdf = join_perf_acq_gdfs(perf_df, acq_gdf)
-    del(perf_df)
-    del(acq_gdf)
+    #del(perf_df)
+    #del(acq_gdf)
 
     final_gdf = last_mile_cleaning(final_gdf)
     return final_gdf
 
-def _parse_dtyped_csv(fname, dtypes, **kw):
-    all_but_dates = {col: valtype for (col, valtype) in dtypes.items()
-                     if valtype != 'datetime64'}
-    dates_only = [col for (col, valtype) in dtypes.items()
-                     if valtype == 'datetime64']
 
-    return pd.read_csv(fname, dtype=all_but_dates, parse_dates=dates_only, **kw)
-
-def cpu_load_performance_csv(performance_path, **kwargs):
+def cpu_load_performance_csv(performance_path):#, **kwargs):
     """ Loads performance data
 
     Returns
@@ -91,46 +91,47 @@ def cpu_load_performance_csv(performance_path, **kwargs):
         "foreclosure_principal_write_off_amount", "servicing_activity_indicator"
     ]
     
-    dtypes = OrderedDict([
-        ("loan_id", "int64"),
-        ("monthly_reporting_period", "datetime64"),
-        ("servicer", "category"),
-        ("interest_rate", "float64"),
-        ("current_actual_upb", "float64"),
-        ("loan_age", "float64"),
-        ("remaining_months_to_legal_maturity", "float64"),
-        ("adj_remaining_months_to_maturity", "float64"),
-        ("maturity_date", "datetime64"),
-        ("msa", "float64"),
-        ("current_loan_delinquency_status", "int32"),
-        ("mod_flag", "category"),
-        ("zero_balance_code", "category"),
-        ("zero_balance_effective_date", "datetime64"),
-        ("last_paid_installment_date", "datetime64"),
-        ("foreclosed_after", "datetime64"),
-        ("disposition_date", "datetime64"),
-        ("foreclosure_costs", "float64"),
-        ("prop_preservation_and_repair_costs", "float64"),
-        ("asset_recovery_costs", "float64"),
-        ("misc_holding_expenses", "float64"),
-        ("holding_taxes", "float64"),
-        ("net_sale_proceeds", "float64"),
-        ("credit_enhancement_proceeds", "float64"),
-        ("repurchase_make_whole_proceeds", "float64"),
-        ("other_foreclosure_proceeds", "float64"),
-        ("non_interest_bearing_upb", "float64"),
-        ("principal_forgiveness_upb", "float64"),
-        ("repurchase_make_whole_proceeds_flag", "category"),
-        ("foreclosure_principal_write_off_amount", "float64"),
-        ("servicing_activity_indicator", "category")
-    ])
+    dtypes = { 
+        "loan_id": np.int64,
+        "monthly_reporting_period": str,# "datetime64"),
+        "servicer": str, #CategoricalDtype(categories=[]),
+        "interest_rate": np.float64,
+        "current_actual_upb": np.float64,
+        "loan_age": np.float64,
+        "remaining_months_to_legal_maturity": np.float64,
+        "adj_remaining_months_to_maturity": np.float64,
+        "maturity_date": str,# "datetime64"),
+        "msa": np.float64,
+        "current_loan_delinquency_status": np.int32,
+        "mod_flag": CategoricalDtype(['N', 'Y']),
+        "zero_balance_code": CategoricalDtype(['01', '02', '06', '09', '03', '15', '16']),
+        "zero_balance_effective_date": str,# "datetime64"),
+        "last_paid_installment_date": str,# "datetime64"),
+        "foreclosed_after": str,# "datetime64"),
+        "disposition_date": str,# "datetime64"),
+        "foreclosure_costs": np.float64,
+        "prop_preservation_and_repair_costs": np.float64,
+        "asset_recovery_costs": np.float64,
+        "misc_holding_expenses": np.float64,
+        "holding_taxes": np.float64,
+        "net_sale_proceeds": np.float64,
+        "credit_enhancement_proceeds": np.float64,
+        "repurchase_make_whole_proceeds": np.float64,
+        "other_foreclosure_proceeds": np.float64,
+        "non_interest_bearing_upb": np.float64,
+        "principal_forgiveness_upb": np.float64,
+        "repurchase_make_whole_proceeds_flag": CategoricalDtype(['N', 'Y']),
+        "foreclosure_principal_write_off_amount": np.float64,
+        "servicing_activity_indicator": CategoricalDtype(['N', 'Y']),
+    }
+    dates_only = [1, 8, 13, 14, 15, 16]
 
     print(performance_path)
-    
-    return _parse_dtyped_csv(performance_path, dtypes, names=cols, delimiter='|')
+    return pd.read_csv(performance_path, dtype=dtypes, parse_dates=dates_only,
+                       names=cols, delimiter='|', index_col=True)
 
 
-def cpu_load_acquisition_csv(acquisition_path, **kwargs):
+def cpu_load_acquisition_csv(acq_path):#, **kwargs):
     """ Loads acquisition data
 
     Returns
@@ -146,38 +147,48 @@ def cpu_load_acquisition_csv(acquisition_path, **kwargs):
         'relocation_mortgage_indicator'
     ]
     
-    dtypes = OrderedDict([
-        ("loan_id", "int64"),
-        ("orig_channel", "category"),
-        ("seller_name", "category"),
-        ("orig_interest_rate", "float64"),
-        ("orig_upb", "int64"),
-        ("orig_loan_term", "int64"),
-        ("orig_date", "datetime64"),
-        ("first_pay_date", "datetime64"),
-        ("orig_ltv", "float64"),
-        ("orig_cltv", "float64"),
-        ("num_borrowers", "float64"),
-        ("dti", "float64"),
-        ("borrower_credit_score", "float64"),
-        ("first_home_buyer", "category"),
-        ("loan_purpose", "category"),
-        ("property_type", "category"),
-        ("num_units", "int64"),
-        ("occupancy_status", "category"),
-        ("property_state", "category"),
-        ("zip", "int64"),
-        ("mortgage_insurance_percent", "float64"),
-        ("product_type", "category"),
-        ("coborrow_credit_score", "float64"),
-        ("mortgage_insurance_type", "float64"),
-        ("relocation_mortgage_indicator", "category")
-    ]) 
-    print(acquisition_path)
-    return _parse_dtyped_csv(acquisition_path, dtypes, names=cols, delimiter='|', index_col=False)
+    dtypes = {
+        "loan_id": np.int64,
+        "orig_channel": CategoricalDtype(['B', 'C', 'R']),
+        "seller_name": str, 
+        "orig_interest_rate": np.float64,
+        "orig_upb": np.int64,
+        "orig_loan_term": np.int64,
+        "orig_date": str,
+        "first_pay_date": str,
+        "orig_ltv": np.float64,
+        "orig_cltv": np.float64,
+        "num_borrowers": np.float64,
+        "dti": np.float64,
+        "borrower_credit_score": np.float64,
+        "first_home_buyer": CategoricalDtype(['N', 'U', 'Y']),
+        "loan_purpose": CategoricalDtype(['C', 'P', 'R', 'U']),
+        "property_type": CategoricalDtype(['CO', 'CP', 'MH', 'PU', 'SF']),
+        "num_units": np.int64,
+        "occupancy_status": CategoricalDtype(['I', 'P', 'S']),
+        "property_state": CategoricalDtype(['AK', 'AL', 'AR', 'AZ', 'CA', 'CO',
+                                            'CT', 'DC', 'DE', 'FL', 'GA', 'HI',
+                                            'IA', 'ID', 'IL', 'IN', 'KS', 'KY',
+                                            'LA', 'MA', 'MD', 'ME', 'MI', 'MN',
+                                            'MO', 'MS', 'MT', 'NC', 'ND', 'NE',
+                                            'NH', 'NJ', 'NM', 'NV', 'NY', 'OH',
+                                            'OK', 'OR', 'PA', 'PR', 'RI', 'SC',
+                                            'SD', 'TN', 'TX', 'UT', 'VA', 'VI',
+                                            'VT', 'WA', 'WI', 'WV', 'WY']),
+        "zip": np.int64,
+        "mortgage_insurance_percent": np.float64,
+        "product_type": CategoricalDtype(['FRM']),
+        "coborrow_credit_score": np.float64,
+        "mortgage_insurance_type": np.float64,
+        "relocation_mortgage_indicator": CategoricalDtype(['N', 'Y']),
+    }
+    dates_only = [6, 7]
+    print(acq_path)
+    return pd.read_csv(acq_path, dtype=dtypes, parse_dates=dates_only,
+                       names=cols, delimiter='|', index_col=False)
 
 
-def pd_load_names(**kwargs):
+def pd_load_names():#**kwargs):
     """ Loads names used for renaming the banks
     
     Returns
@@ -189,61 +200,64 @@ def pd_load_names(**kwargs):
         'seller_name', 'new'
     ]
     
-    dtypes = OrderedDict([
-        ("seller_name", "category"),
-        ("new", "category"),
-    ])
+    dtypes = { 
+        "seller_name": str,# CategoricalDtype(categories=[]),
+        "new": str,# CategoricalDtype(categories=[]),
+    }
+    #dtypes1 = {}
+    #for col, valtype in dtypes.items():
+    #    dtypes1[col] = pd.core.dtypes.common.pandas_dtype(valtype)
 
-    return pd.read_csv(col_names_path, names=cols, delimiter='|')
+    return pd.read_csv(col_names_path, names=cols, dtype=dtypes, delimiter='|')
 
 
-def create_ever_features(gdf, **kwargs):
+def create_ever_features(gdf):#, **kwargs):
     everdf = gdf[['loan_id', 'current_loan_delinquency_status']]
     everdf = everdf.groupby('loan_id', as_index=False).max()
-    del(gdf)
-    everdf['ever_30'] = (everdf['current_loan_delinquency_status'] >= 1).astype('int8')
-    everdf['ever_90'] = (everdf['current_loan_delinquency_status'] >= 3).astype('int8')
-    everdf['ever_180'] = (everdf['current_loan_delinquency_status'] >= 6).astype('int8')
+    #del(gdf)
+    everdf['ever_30'] = (everdf['current_loan_delinquency_status'] >= 1).astype(np.int8)
+    everdf['ever_90'] = (everdf['current_loan_delinquency_status'] >= 3).astype(np.int8)
+    everdf['ever_180'] = (everdf['current_loan_delinquency_status'] >= 6).astype(np.int8)
     everdf = everdf.drop(['current_loan_delinquency_status'], axis=1)
     return everdf
 
 
-def create_delinq_features(gdf, **kwargs):
+def create_delinq_features(gdf):#, **kwargs):
     delinq_gdf = gdf[['loan_id', 'monthly_reporting_period', 'current_loan_delinquency_status']]
-    del(gdf)
-    delinq_30 = delinq_gdf.query('current_loan_delinquency_status >= 1')[['loan_id', 'monthly_reporting_period']].groupby('loan_id', as_index=False).min()
+    #del(gdf)
+    delinq_30 = delinq_gdf[delinq_gdf['current_loan_delinquency_status'] >= 1][['loan_id', 'monthly_reporting_period']].groupby('loan_id', as_index=False).min()
     delinq_30['delinquency_30'] = delinq_30['monthly_reporting_period']
     delinq_30 = delinq_30.drop(['monthly_reporting_period'], axis=1)
-    delinq_90 = delinq_gdf.query('current_loan_delinquency_status >= 3')[['loan_id', 'monthly_reporting_period']].groupby('loan_id', as_index=False).min()
+    delinq_90 = delinq_gdf[delinq_gdf['current_loan_delinquency_status'] >= 3][['loan_id', 'monthly_reporting_period']].groupby('loan_id', as_index=False).min()
     delinq_90['delinquency_90'] = delinq_90['monthly_reporting_period']
     delinq_90 = delinq_90.drop(['monthly_reporting_period'], axis=1)
-    delinq_180 = delinq_gdf.query('current_loan_delinquency_status >= 6')[['loan_id', 'monthly_reporting_period']].groupby('loan_id', as_index=False).min()
+    delinq_180 = delinq_gdf[delinq_gdf['current_loan_delinquency_status'] >= 6][['loan_id', 'monthly_reporting_period']].groupby('loan_id', as_index=False).min()
     delinq_180['delinquency_180'] = delinq_180['monthly_reporting_period']
     delinq_180 = delinq_180.drop(['monthly_reporting_period'], axis=1)
-    del(delinq_gdf)
+    #del(delinq_gdf)
     delinq_merge = delinq_30.merge(delinq_90, how='left', on=['loan_id'])
-    delinq_merge['delinquency_90'] = delinq_merge['delinquency_90'].fillna(np.dtype('datetime64[ms]').type('1970-01-01').astype('datetime64[ms]'))
+    delinq_merge['delinquency_90'] = delinq_merge['delinquency_90'].fillna(dt64_fill)
     delinq_merge = delinq_merge.merge(delinq_180, how='left', on=['loan_id'])
-    delinq_merge['delinquency_180'] = delinq_merge['delinquency_180'].fillna(np.dtype('datetime64[ms]').type('1970-01-01').astype('datetime64[ms]'))
-    del(delinq_30)
-    del(delinq_90)
-    del(delinq_180)
+    delinq_merge['delinquency_180'] = delinq_merge['delinquency_180'].fillna(dt64_fill)
+    #del(delinq_30)
+    #del(delinq_90)
+    #del(delinq_180)
     return delinq_merge
 
 
-def join_ever_delinq_features(everdf_tmp, delinq_merge, **kwargs):
+def join_ever_delinq_features(everdf_tmp, delinq_merge):#, **kwargs):
     everdf = everdf_tmp.merge(delinq_merge, on=['loan_id'], how='left')
-    del(everdf_tmp)
-    del(delinq_merge)
-    everdf['delinquency_30'] = everdf['delinquency_30'].fillna(np.dtype('datetime64[ms]').type('1970-01-01').astype('datetime64[ms]'))
-    everdf['delinquency_90'] = everdf['delinquency_90'].fillna(np.dtype('datetime64[ms]').type('1970-01-01').astype('datetime64[ms]'))
-    everdf['delinquency_180'] = everdf['delinquency_180'].fillna(np.dtype('datetime64[ms]').type('1970-01-01').astype('datetime64[ms]'))
+    #del(everdf_tmp)
+    #del(delinq_merge)
+    everdf['delinquency_30'] = everdf['delinquency_30'].fillna(dt64_fill)
+    everdf['delinquency_90'] = everdf['delinquency_90'].fillna(dt64_fill)
+    everdf['delinquency_180'] = everdf['delinquency_180'].fillna(dt64_fill)
     return everdf
 
 
-def create_joined_df(gdf, everdf, **kwargs):
-    test = gdf.loc[:, ['loan_id', 'monthly_reporting_period', 'current_loan_delinquency_status', 'current_actual_upb']]
-    del(gdf)
+def create_joined_df(gdf, everdf):#, **kwargs):
+    test = gdf[['loan_id', 'monthly_reporting_period', 'current_loan_delinquency_status', 'current_actual_upb']]
+    #del(gdf)
     test['timestamp'] = test['monthly_reporting_period']
     test = test.drop(['monthly_reporting_period'], axis=1)
     test['timestamp_month'] = test['timestamp'].dt.month
@@ -256,92 +270,107 @@ def create_joined_df(gdf, everdf, **kwargs):
     test['delinquency_12'] = test['delinquency_12'].fillna(-1)
     
     joined_df = test.merge(everdf, how='left', on=['loan_id'])
-    del(everdf)
-    del(test)
+    #del(everdf)
+    #del(test)
     
     joined_df['ever_30'] = joined_df['ever_30'].fillna(-1)
     joined_df['ever_90'] = joined_df['ever_90'].fillna(-1)
     joined_df['ever_180'] = joined_df['ever_180'].fillna(-1)
-    joined_df['delinquency_30'] = joined_df['delinquency_30'].fillna(-1)
-    joined_df['delinquency_90'] = joined_df['delinquency_90'].fillna(-1)
-    joined_df['delinquency_180'] = joined_df['delinquency_180'].fillna(-1)
+    joined_df['delinquency_30'] = joined_df['delinquency_30'].fillna(dt64_fill)
+    joined_df['delinquency_90'] = joined_df['delinquency_90'].fillna(dt64_fill)
+    joined_df['delinquency_180'] = joined_df['delinquency_180'].fillna(dt64_fill)
     
-    joined_df['timestamp_year'] = joined_df['timestamp_year'].astype('int32')
-    joined_df['timestamp_month'] = joined_df['timestamp_month'].astype('int32')
+    joined_df['timestamp_year'] = joined_df['timestamp_year'].astype(np.int32)
+    joined_df['timestamp_month'] = joined_df['timestamp_month'].astype(np.int32)
     
     return joined_df
 
 
-def create_12_mon_features(joined_df, **kwargs):
-    testdfs = []
+def _create_month_features(joined_df, y):
     n_months = 12
-    for y in range(1, n_months + 1):
-        tmpdf = joined_df.loc[:, ['loan_id', 'timestamp_year', 'timestamp_month', 'delinquency_12', 'upb_12']]
-        tmpdf['josh_months'] = tmpdf['timestamp_year'] * 12 + tmpdf['timestamp_month']
-        tmpdf['josh_mody_n'] = np.floor((tmpdf['josh_months'].astype('float64') - 24000 - y) / 12)
-        tmpdf = tmpdf.groupby(['loan_id', 'josh_mody_n'], as_index=False).agg({'delinquency_12': 'max','upb_12': 'min'})
-        tmpdf['delinquency_12'] = (tmpdf['delinquency_12']>3).astype('int32')
-        tmpdf['delinquency_12'] +=(tmpdf['upb_12']==0).astype('int32')
-        #tmpdf.drop('max_delinquency_12', axis=1)
-        #tmpdf['upb_12'] = tmpdf['min_upb_12']
-        #tmpdf.drop('min_upb_12', axis=1)
-        tmpdf['timestamp_year'] = np.floor(((tmpdf['josh_mody_n'] * n_months) + 24000 + (y - 1)) / 12).astype('int16')
-        tmpdf['timestamp_month'] = np.int8(y)
-        tmpdf = tmpdf.drop(['josh_mody_n'], axis=1)
-        testdfs.append(tmpdf)
-        del(tmpdf)
-    del(joined_df)
+    tmpdf = joined_df[['loan_id', 'timestamp_year', 'timestamp_month', 'delinquency_12', 'upb_12']]
+    tmpdf['josh_months'] = tmpdf['timestamp_year'] * 12 + tmpdf['timestamp_month']
+    tmpdf['josh_mody_n'] = np.floor((tmpdf['josh_months'].astype(np.float64) - 24000 - y) / 12)
+    #tmpdf = tmpdf.groupby(['loan_id', 'josh_mody_n'], as_index=False).agg({'delinquency_12': 'max','upb_12': 'min'})
+    tmpdf_d = tmpdf.groupby(['loan_id', 'josh_mody_n'], as_index=False)['delinquency_12'].max()
+    tmpdf_m = tmpdf.groupby(['loan_id', 'josh_mody_n'], as_index=False)['upb_12'].min()
+    tmpdf_d['upb_12'] = tmpdf_m['upb_12']
+    tmpdf1 = tmpdf_d
+    tmpdf1['delinquency_12'] = (tmpdf1['delinquency_12']>3).astype(np.int32)
+    tmpdf1['delinquency_12'] +=(tmpdf1['upb_12']==0).astype(np.int32)
+    #tmpdf.drop('max_delinquency_12', axis=1)
+    #tmpdf['upb_12'] = tmpdf['min_upb_12']
+    #tmpdf.drop('min_upb_12', axis=1)
+    tmpdf1['timestamp_year'] = np.floor(((tmpdf1['josh_mody_n'] * n_months) + 24000 + (y - 1)) / 12).astype(np.int16)
+    tmpdf1['timestamp_month'] = np.int8(y)
+    return tmpdf.drop(['josh_mody_n'], axis=1)
 
-    return pd.concat(testdfs)
+
+def create_12_mon_features(joined_df):#, **kwargs):
+    concats = [_create_month_features(joined_df, 1),
+               _create_month_features(joined_df, 2),
+               _create_month_features(joined_df, 3),
+               _create_month_features(joined_df, 4),
+               _create_month_features(joined_df, 5),
+               _create_month_features(joined_df, 6),
+               _create_month_features(joined_df, 7),
+               _create_month_features(joined_df, 8),
+               _create_month_features(joined_df, 9),
+               _create_month_features(joined_df, 10),
+               _create_month_features(joined_df, 11),
+               _create_month_features(joined_df, 12)
+    ]
+    return pd.concat(concats)
     
 
-def combine_joined_12_mon(joined_df, testdf, **kwargs):
+def combine_joined_12_mon(joined_df, testdf):#, **kwargs):
     joined_df = joined_df.drop(['delinquency_12'], axis=1)
     joined_df = joined_df.drop(['upb_12'], axis=1)
-    joined_df['timestamp_year'] = joined_df['timestamp_year'].astype('int16')
-    joined_df['timestamp_month'] = joined_df['timestamp_month'].astype('int8')
+    joined_df['timestamp_year'] = joined_df['timestamp_year'].astype(np.int16)
+    joined_df['timestamp_month'] = joined_df['timestamp_month'].astype(np.int8)
     return joined_df.merge(testdf, how='left',
                            on=['loan_id', 'timestamp_year', 'timestamp_month'])
 
 
-def final_performance_delinquency(gdf, joined_df, **kwargs):
+def final_performance_delinquency(gdf, joined_df):#, **kwargs):
     merged = null_workaround(gdf)
     joined_df = null_workaround(joined_df)
-    joined_df['timestamp_month'] = joined_df['timestamp_month'].astype('int8')
-    joined_df['timestamp_year'] = joined_df['timestamp_year'].astype('int16')
+    joined_df['timestamp_month'] = joined_df['timestamp_month'].astype(np.int8)
+    joined_df['timestamp_year'] = joined_df['timestamp_year'].astype(np.int16)
     merged['timestamp_month'] = merged['monthly_reporting_period'].dt.month
-    merged['timestamp_month'] = merged['timestamp_month'].astype('int8')
+    merged['timestamp_month'] = merged['timestamp_month'].astype(np.int8)
     merged['timestamp_year'] = merged['monthly_reporting_period'].dt.year
-    merged['timestamp_year'] = merged['timestamp_year'].astype('int16')
+    merged['timestamp_year'] = merged['timestamp_year'].astype(np.int16)
     merged = merged.merge(joined_df, how='left', on=['loan_id', 'timestamp_year', 'timestamp_month'])
     merged = merged.drop(['timestamp_year'], axis=1)
     merged = merged.drop(['timestamp_month'], axis=1)
     return merged
 
 
-def join_perf_acq_gdfs(perf, acq, **kwargs):
+def join_perf_acq_gdfs(perf, acq):#, **kwargs):
     perf = null_workaround(perf)
     acq = null_workaround(acq)
     return perf.merge(acq, how='left', on=['loan_id'])
 
 
-def last_mile_cleaning(df, **kwargs):
+def last_mile_cleaning(df):#, **kwargs):
     drop_list = [
         'loan_id', 'orig_date', 'first_pay_date', 'seller_name',
         'monthly_reporting_period', 'last_paid_installment_date', 'maturity_date', 'ever_30', 'ever_90', 'ever_180',
         'delinquency_30', 'delinquency_90', 'delinquency_180', 'upb_12',
         'zero_balance_effective_date','foreclosed_after', 'disposition_date','timestamp'
     ]
-    for column in drop_list:
-        df = df.drop([column], axis=1)
-    for col, dtype in df.dtypes.iteritems():
-        if str(dtype)=='category':
-            df[col] = df[col].cat.codes
-        #df[col] = df[col].astype('float32')
+    df.drop(drop_list, axis=1, inplace=True)
+    #for column in drop_list:
+    #    df.drop([column], axis=1, inplace=True)
+    #for col, dtype in df.dtypes.iteritems():
+    #    if str(dtype)=='category':
+    #        df[col] = df[col].cat.codes
+    #    #df[col] = df[col].astype('float32')
     df['delinquency_12'] = df['delinquency_12'] > 0
-    df['delinquency_12'] = df['delinquency_12'].fillna(False).astype('int32')
-    for column in df.columns:
-        df[column] = df[column].fillna(np.dtype(str(df[column].dtype)).type(-1))
+    df['delinquency_12'] = df['delinquency_12'].fillna(False).astype(np.int32)
+    #for column in df.columns:
+    #    df[column] = df[column].fillna(np.dtype(str(df[column].dtype)).type(-1))
     return df
 
 
@@ -400,10 +429,23 @@ def train_xgb(pd_df):
                           num_boost_round=dxgb_cpu_params['nround'])
     return model_xgb
 
+if 'hpat' in ml_fw:
+    import hpat
+    run_cpu_workflow = hpat.jit(locals={'final_gdf:return': 'distributed'})(run_cpu_workflow)
+    for func_name in ('pd_load_names', 'cpu_load_acquisition_csv',
+                      'cpu_load_performance_csv', 'create_ever_features',
+                      'create_delinq_features', 'join_ever_delinq_features',
+                      'create_joined_df', 'create_12_mon_features',
+                      'combine_joined_12_mon', 'final_performance_delinquency',
+                      'join_perf_acq_gdfs', 'last_mile_cleaning',
+                      '_create_month_features',
+                      'null_workaround', 'train_xgb'):
+        globals()[func_name] = hpat.jit(globals()[func_name])
 
 ML_FWS = {
     'xgb': train_xgb,
-    'daal': train_daal
+    'daal': train_daal,
+    'hpat-xgb': train_xgb,
 }
 
 
