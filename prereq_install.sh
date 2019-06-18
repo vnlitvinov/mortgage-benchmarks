@@ -52,12 +52,3 @@ else
     echo "$DATASET_NAME file was found"
 fi
 cd ../..
-
-
-conda create -n cudf_dev  -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.7 python=3.6 cudatoolkit=9.2 -y
-conda init bash
-
-
-# now in mortgage-benchmarks folder
-# time python Mortgage_GPU.py  test_mortgage_gpu/dataset/ 1
-

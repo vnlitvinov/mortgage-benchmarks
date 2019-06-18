@@ -1,0 +1,11 @@
+name: mortgage_gpu
+channels:
+- nvidia
+- rapidsai
+- numba
+- conda-forge
+- defaults
+dependencies:
+cudf=0.7
+python=3.6
+cudatoolkit=9.2
