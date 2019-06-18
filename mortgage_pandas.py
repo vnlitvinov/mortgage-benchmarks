@@ -7,6 +7,8 @@ import daal4py
 from collections import OrderedDict
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
+from numba import gdb_init, gdb_breakpoint
+
 
 dt64_fill = np.dtype('datetime64[ns]').type('1970-01-01').astype('datetime64[ns]')
 
@@ -27,6 +29,21 @@ perf_data_path = mortgage_path + "/perf"
 col_names_path = mortgage_path + "/names.csv"
 
 
+import hpat
+import numba
+import ctypes
+
+fflush = ctypes.CDLL(None).fflush
+fflush.argtypes = (ctypes.c_void_p,)
+fflush.restype = ctypes.c_int
+@numba.jit(nopython=False)
+def do_log(msg):
+    print(msg)
+    fflush(0)
+#   f = open('log.txt','a')
+ #  f.write(msg + '\n')
+  # f.close()
+
 def null_workaround(df):#, **kwargs):
     return df
     '''
@@ -39,39 +56,52 @@ def null_workaround(df):#, **kwargs):
     '''
 
 
-def run_cpu_workflow(quarter=1, year=2000, perf_file=""):#, **kwargs):
+def run_cpu_workflow(quarter=1, year=2000, perf_file="", limit_rows=False):#, **kwargs):
     names = pd_load_names()
+    do_log('FOO')
     acq_gdf = cpu_load_acquisition_csv(acq_data_path + "/Acquisition_"
-                                      + str(year) + "Q" + str(quarter) + ".txt")
+                                      + str(year) + "Q" + str(quarter) + ".txt", limit_rows)
     acq_gdf = acq_gdf.merge(names, how='left', on=['seller_name'])
     acq_gdf = acq_gdf.drop(['seller_name'], axis=1)
     acq_gdf['seller_name'] = acq_gdf['new']
     acq_gdf = acq_gdf.drop(['new'], axis=1)
+    do_log('FOO')
 
-    perf_df_tmp = cpu_load_performance_csv(perf_file)
+    perf_df_tmp = cpu_load_performance_csv(perf_file, limit_rows)
+    do_log('FOO')
     gdf = perf_df_tmp
     everdf = create_ever_features(gdf)
     delinq_merge = create_delinq_features(gdf)
     everdf = join_ever_delinq_features(everdf, delinq_merge)
+    do_log('FOO')
     #del(delinq_merge)
 
     joined_df = create_joined_df(gdf, everdf)
+    do_log('FOO')
+
     testdf = create_12_mon_features(joined_df)
+    do_log('FOO')
     joined_df = combine_joined_12_mon(joined_df, testdf)
+    final_gdf = joined_df
+    return final_gdf
+    do_log('FOO')
     #del(testdf)
 
     perf_df = final_performance_delinquency(gdf, joined_df)
+    do_log('FOO')
     #del(gdf, joined_df)
 
     final_gdf = join_perf_acq_gdfs(perf_df, acq_gdf)
+    do_log('FOO')
     #del(perf_df)
     #del(acq_gdf)
 
     final_gdf = last_mile_cleaning(final_gdf)
+    do_log('FOO')
     return final_gdf
 
 
-def cpu_load_performance_csv(performance_path):#, **kwargs):
+def cpu_load_performance_csv(performance_path, limit_rows):#, **kwargs):
     """ Loads performance data
 
     Returns
@@ -125,13 +155,17 @@ def cpu_load_performance_csv(performance_path):#, **kwargs):
         "servicing_activity_indicator": CategoricalDtype(['N', 'Y']),
     }
     dates_only = [1, 8, 13, 14, 15, 16]
+    if limit_rows:
+        nrows = 10
+    else:
+        nrows = None
+        print(performance_path)
 
-    print(performance_path)
     return pd.read_csv(performance_path, dtype=dtypes, parse_dates=dates_only,
-                       names=cols, delimiter='|', index_col=True)
+                       names=cols, delimiter='|', index_col=True, nrows=nrows)
 
 
-def cpu_load_acquisition_csv(acq_path):#, **kwargs):
+def cpu_load_acquisition_csv(acq_path, limit_rows):#, **kwargs):
     """ Loads acquisition data
 
     Returns
@@ -183,7 +217,8 @@ def cpu_load_acquisition_csv(acq_path):#, **kwargs):
         "relocation_mortgage_indicator": CategoricalDtype(['N', 'Y']),
     }
     dates_only = [6, 7]
-    print(acq_path)
+    if not limit_rows:
+        print(acq_path)
     return pd.read_csv(acq_path, dtype=dtypes, parse_dates=dates_only,
                        names=cols, delimiter='|', index_col=False)
 
@@ -431,7 +466,7 @@ def train_xgb(pd_df):
 
 if 'hpat' in ml_fw:
     import hpat
-    run_cpu_workflow = hpat.jit(locals={'final_gdf:return': 'distributed'})(run_cpu_workflow)
+    run_cpu_workflow = hpat.jit(locals={'final_gdf:return': 'distributed'}, debug=True)(run_cpu_workflow)
     for func_name in ('pd_load_names', 'cpu_load_acquisition_csv',
                       'cpu_load_performance_csv', 'create_ever_features',
                       'create_delinq_features', 'join_ever_delinq_features',
@@ -439,14 +474,30 @@ if 'hpat' in ml_fw:
                       'combine_joined_12_mon', 'final_performance_delinquency',
                       'join_perf_acq_gdfs', 'last_mile_cleaning',
                       '_create_month_features',
-                      'null_workaround', 'train_xgb'):
-        globals()[func_name] = hpat.jit(globals()[func_name])
+                      'null_workaround'):
+        globals()[func_name] = hpat.jit(debug=True)(globals()[func_name])
+    _train_xgb = train_xgb
+    def train_xgb(pd_df):
+        for column in ('servicer', 'mod_flag', 'zero_balance_code',
+                       'repurchase_make_whole_proceeds_flag',
+                       'servicing_activity_indicator', 'orig_channel',
+                       'first_home_buyer', 'loan_purpose', 'property_type',
+                       'occupancy_status', 'property_state', 'product_type',
+                       'relocation_mortgage_indicator'):
+            pd_df[column] = pd_df[column].astype('category').cat.codes
+        return _train_xgb(pd_df)
 
 ML_FWS = {
     'xgb': train_xgb,
     'daal': train_daal,
     'hpat-xgb': train_xgb,
 }
+
+def _run_workflow(quarter, limit_rows):
+    perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
+    year = 2000 + quarter // 4
+    file = perf_format_path % (str(year), str(quarter % 4))
+    return run_cpu_workflow(year=year, quarter=(quarter % 4), perf_file=file, limit_rows=limit_rows)
 
 
 def main():
@@ -459,15 +510,15 @@ def main():
         sys.exit('Unsupported ML framework, known are: %s' % ', '.join(ML_FWS))
 
     pd_dfs = []
-    perf_format_path = perf_data_path + "/Performance_%sQ%s.txt"
+
+    # warmup
+    time_warmup = time.time()
+    _run_workflow(1, True)
+    print('warmup time: ', time.time() - time_warmup)
 
     time_ETL = time.time()
     for quarter in range(1, count_quarter_processing + 1):
-        year = 2000 + quarter // 4
-        file = perf_format_path % (str(year), str(quarter % 4))
-        pd_dfs.append(
-            run_cpu_workflow(year=year, quarter=(quarter % 4), perf_file=file)
-        )
+        pd_dfs.append(_run_workflow(quarter, False))
     time_ETL_end = time.time()
     print("ETL time: ", time_ETL_end - time_ETL)
 
