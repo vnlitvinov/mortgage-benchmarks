@@ -9,7 +9,6 @@ Based on [benchmarks published by NVidia for theri RAPIDS](https://render.github
 - follow [the steps](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#Cluster_GPUs_Manual_Install_Driver) to install the necessary driver for V100 GPU (using 396.82 version)
 - `git clone https://github.com/vnlitvin/mortgage-benchmarks.git`
 - `cd mortgage-benchmarks`
-- `git checkout mortgage_gpu`
 - `chmod +x test_mortgage_gpu.sh && ./test_mortgage_gpu.sh`
 - `bash`
 - `conda activate cudf_dev`
