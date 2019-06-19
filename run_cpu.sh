@@ -10,3 +10,4 @@ conda activate mortgage_cpu_daal
 # build pandas from source
 git clone https://github.com/pandas-dev/pandas.git && cd pandas
 python setup.py install
+cd ..
