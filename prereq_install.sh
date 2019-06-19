@@ -22,6 +22,10 @@ DATASET_LINK="http://rapidsai-data.s3-website.us-east-2.amazonaws.com/notebook-m
 DATASET_NAME="$DATASET_FOLDER/mortgage_2000-2001.tgz"
 
 
+sudo apt-get update -y
+sudo apt-get install gcc g++ -y
+
+
 create_dir $TEST_FOLDER
 cd $TEST_FOLDER
 
