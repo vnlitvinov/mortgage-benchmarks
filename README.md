@@ -14,7 +14,7 @@ Based on [benchmarks published by NVidia for their RAPIDS](https://render.github
 - `chmod +x run_gpu.sh && . ./run_gpu.sh`
 - `time python Mortgage_GPU.py  test_mortgage_gpu/dataset/ 1`
 
-## CPU case (while pandas 0.24 is used)
+## CPU case with using pandas upstream
 - launch `c5.18xlarge` cpu instance on AWS cloud with `Ubuntu Server 18.04 LTS (HVM), SSD Volume Type` image
 - login in it
 - `git clone https://github.com/vnlitvin/mortgage-benchmarks.git && cd mortgage-benchmarks`
