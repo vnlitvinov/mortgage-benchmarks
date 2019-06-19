@@ -5,7 +5,7 @@ Based on [benchmarks published by NVidia for their RAPIDS](https://render.github
 
 # Run benchmarks
 
-## GPU case (while pandas 0.24 is used; not working now)
+## GPU case
 - launch `p3.2xlarge` gpu instance on AWS cloud with `Ubuntu Server 18.04 LTS (HVM), SSD Volume Type` image (this instance has a NVIDIA V100 GPU)
 - login in it
 - follow [the steps](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#Cluster_GPUs_Manual_Install_Driver) to install the necessary driver for V100 GPU (using 396.82 version)
