@@ -10,7 +10,54 @@ import os
 dt64_fill = np.dtype('datetime64[ns]').type('1970-01-01').astype('datetime64[ns]')
 
 
-@hpat.jit(locals={'final_gdf:return': 'distributed'})
+import daal4py
+import daal4py.hpat
+
+from numba import types
+
+@hpat.jit#(locals={'y': hpat.float32[:]})
+def train_daal(pd_df):
+    cat_cols = ['servicer', 'mod_flag', 'zero_balance_code',
+                   'repurchase_make_whole_proceeds_flag',
+                   'servicing_activity_indicator', 'orig_channel',
+                   'first_home_buyer', 'loan_purpose', 'property_type',
+                   'occupancy_status', 'property_state', 'product_type',
+                   'relocation_mortgage_indicator']
+    pd_df.drop(cat_cols, axis=1, inplace=True)
+
+    y1 = pd_df["delinquency_12"].astype(np.float32).values.reshape(len(pd_df), 1)
+    x1 = pd_df.drop(["delinquency_12"], axis=1).values.astype(np.float32)
+#    y = y1#np.array(y1).reshape(len(pd_df), 1)
+#    x = np.ascontiguousarray(pd_df.drop(["delinquency_12"], axis=1).astype(np.float32))
+#    y = np.ascontiguousarray(pd_df["delinquency_12"].astype(np.float32)).reshape(len(pd_df), 1)
+#    x = np.ascontiguousarray(pd_df.drop(["delinquency_12"], axis=1).astype(np.float32))
+
+    train_algo = daal4py.gbt_regression_training(
+		fptype=                       'float',
+		maxIterations=                100,
+		maxTreeDepth=                 8,
+		minSplitLoss=                 0.1,
+		shrinkage=                    0.1,
+		observationsPerTreeFraction=  1,
+		lambda_=                      1,
+		minObservationsInLeafNode=    1,
+		maxBins=                      256,
+		featuresPerNode=              0,
+		minBinSize=                   5,
+		memorySavingMode=             False,
+        )
+    train_result = train_algo.compute(x1, y1)
+    return train_result
+
+@hpat.jit
+def do_stuff(year, quarter, perf_file):
+    pd_df = morg_func(year, quarter, perf_file)
+    train_start = time.time()
+    res = train_daal(pd_df)
+    print('training time:', (time.time() - train_start))
+    return res
+
+@hpat.jit(locals={'final_gdf:return': 'distributed'}, cache=True)
 def morg_func(year, quarter, perf_file):
     t1 = time.time()
     # read names file
@@ -222,12 +269,36 @@ def morg_func(year, quarter, perf_file):
     final_gdf.drop(drop_list, axis=1, inplace=True)
     final_gdf['delinquency_12'] = final_gdf['delinquency_12'] > 0
     final_gdf['delinquency_12'] = final_gdf['delinquency_12'].fillna(False).astype(np.int32)
+
+#    cat_cols = ['servicer', 'mod_flag', 'zero_balance_code',
+#                   'repurchase_make_whole_proceeds_flag',
+#                   'servicing_activity_indicator', 'orig_channel',
+#                   'first_home_buyer', 'loan_purpose', 'property_type',
+#                   'occupancy_status', 'property_state', 'product_type',
+#                   'relocation_mortgage_indicator']
+#    final_gdf.drop(cat_cols, axis=1, inplace=True)
+#    for foo in ['mod_flag']:
+#        final_gdf[foo] = hpat.hiframes.pd_categorical_ext.cat_array_to_int(final_gdf[foo])
+#    final_gdf['mod_flag'] = hpat.hiframes.pd_categorical_ext.cat_array_to_int(final_gdf['mod_flag'])
+    #final_gdf['mod_flag'] = final_gdf['mod_flag'].astype(np.int8)#cat.codes
+    #final_gdf['servicer'] = final_gdf['servicer'].astype().cat.codes
+    
+#    for column in ('servicer', 'mod_flag', 'zero_balance_code',
+#                   'repurchase_make_whole_proceeds_flag',
+#                   'servicing_activity_indicator', 'orig_channel',
+#                   'first_home_buyer', 'loan_purpose', 'property_type',
+#                   'occupancy_status', 'property_state', 'product_type',
+#                   'relocation_mortgage_indicator'):
+#        pdc = hpat.hiframes.pd_categorical_ext.cat_array_to_int(final_gdf[column])
+#        final_gdf[column] = pdc
+        #final_gdf[column] = hpat.hiframes.pd_categorical_ext.cat_array_to_int(final_gdf[column].astype('category'))
+
     t2 = time.time()
     print("exec time", t2-t1)
     return final_gdf
 
 
-@hpat.jit
+@hpat.jit(cache=True)
 def get_tmp_df(joined_df, y):
     n_months = 12
     tmpdf = joined_df[['loan_id', 'timestamp_year', 'timestamp_month', 'delinquency_12', 'upb_12']]
@@ -266,7 +337,8 @@ def main():
         for file in glob(os.path.join(perf_data_path + "/Performance_" + str(year) + "Q" + str(quarter) + "*")):
             #gpu_dfs.append(process_quarter_gpu(year=year, quarter=quarter, perf_file=file))
             print(year, quarter, file)
-            df = morg_func(year=year, quarter=quarter, perf_file=file)
+            #df = morg_func(year=year, quarter=quarter, perf_file=file)
+            train_res = do_stuff(year, quarter, file)
             count += 1
         quarter += 1
         if quarter == 5:
@@ -277,7 +349,8 @@ def main():
 
 if __name__ == '__main__':
     perf_file = "./perf/Performance_2000Q1.txt"
-    df = morg_func(2000, 1, perf_file)
+    #df = morg_func(2000, 1, perf_file)
+    df = do_stuff(2000, 1, perf_file)
 
 #main()
 

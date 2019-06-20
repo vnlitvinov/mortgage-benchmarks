@@ -82,8 +82,6 @@ def run_cpu_workflow(quarter=1, year=2000, perf_file="", limit_rows=False):#, **
     testdf = create_12_mon_features(joined_df)
     do_log('FOO')
     joined_df = combine_joined_12_mon(joined_df, testdf)
-    final_gdf = joined_df
-    return final_gdf
     do_log('FOO')
     #del(testdf)
 
@@ -162,7 +160,7 @@ def cpu_load_performance_csv(performance_path, limit_rows):#, **kwargs):
         print(performance_path)
 
     return pd.read_csv(performance_path, dtype=dtypes, parse_dates=dates_only,
-                       names=cols, delimiter='|', index_col=True, nrows=nrows)
+                       names=cols, delimiter='|', index_col=None, nrows=nrows)
 
 
 def cpu_load_acquisition_csv(acq_path, limit_rows):#, **kwargs):
