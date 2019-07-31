@@ -16,7 +16,7 @@ function create_dir {
 
 
 # constants
-TEST_FOLDER="$(pwd)/test_mortgage_gpu"
+TEST_FOLDER="$(pwd)/test_mortgage"
 DATASET_FOLDER="$TEST_FOLDER/mortgage_dataset"
 DATASET_LINK="http://rapidsai-data.s3-website.us-east-2.amazonaws.com/notebook-mortgage-data/mortgage_2000-2001.tgz"
 DATASET_NAME="$DATASET_FOLDER/mortgage_2000-2001.tgz"
