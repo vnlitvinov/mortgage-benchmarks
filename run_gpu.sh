@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-. ./prereq_install.sh
+source ./prereq_install.sh
 
 conda env create -f ./requirements_gpu.yml
 conda activate mortgage_gpu
