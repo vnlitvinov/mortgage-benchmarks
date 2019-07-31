@@ -9,4 +9,4 @@ dependencies:
 - pip
 - pip:
   - xgboost
-  - pandas
+  - pandas>=0.25

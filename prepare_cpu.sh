@@ -1,10 +1,10 @@
 #!/bin/bash
-
+set -e
 
 # prepare conda tool, mortgage dataset
-. ./prereq_install.sh
+source ./prereq_install.sh
 
-conda env create -f requirements_cpu_daal.yml
+conda env list | grep -q mortgage_cpu_daal || conda env create -f requirements_cpu_daal.yml
 echo "env mortgage_cpu_daal is created"
 
 conda activate mortgage_cpu_daal
@@ -22,5 +22,10 @@ echo "mortgage_cpu_daal is activated"
 # python setup.py install
 # echo "build successful"
 
-cd ..
-echo "now you can run 'time python mortgage_pandas.py test_mortgage/mortgage_dataset/ 1 {daal, xgb}'"
+
+cd `dirname $0`
+echo Measuring with DAAL4PY
+time python mortgage_pandas.py $DATASET_FOLDER 1 daal
+echo Measuring with XGBoost
+time python mortgage_pandas.py $DATASET_FOLDER 1 xgb
+

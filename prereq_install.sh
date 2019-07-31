@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 
 # constants
 TEST_FOLDER="$(pwd)/test_mortgage"
@@ -18,15 +18,18 @@ cd $TEST_FOLDER
 
 if [[ ! "$(command -v conda)" ]]; then
     echo 'conda command was not found in $PATH; attempting to install miniconda to "~/miniconda"'
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-    bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O Miniconda3-latest-Linux-x86_64.sh
+    bash Miniconda3-latest-Linux-x86_64.sh -b -p $HOME/miniconda -u
     rm Miniconda3-latest-Linux-x86_64.sh
     export PATH="$HOME/miniconda/bin:$PATH"
     conda init bash
-    source ~/.bashrc
-    echo "conda installed"
+    source ~/miniconda/etc/profile.d/conda.sh
+    echo "conda installed to ~/miniconda"
 else
-    echo "conda command was found in the PATH"
+    CONDA_BIN=$(which conda)
+    CONDA_PROFILE=$(dirname $CONDA_BIN)/../etc/profile.d/conda.sh
+    source $CONDA_PROFILE
+    echo 'conda found in $PATH'
 fi
 echo ""
 
@@ -37,7 +40,7 @@ cd $DATASET_FOLDER
 
 if [[ ! -f $DATASET_NAME ]]; then
     echo "$DATASET_NAME file wasn't found"
-    echo "attemp to download this file from $DATASET_LINK"
+    echo "downloading it from $DATASET_LINK"
     wget $DATASET_LINK
     tar -xzvf $DATASET_NAME
 else
