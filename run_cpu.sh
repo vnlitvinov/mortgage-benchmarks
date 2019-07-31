@@ -24,8 +24,14 @@ echo "mortgage_cpu_daal is activated"
 
 
 cd `dirname $0`
-echo Measuring with DAAL4PY
+
+echo ''
+echo -------------/ Measuring with DAAL4PY /-------------
+echo ''
 time python mortgage_pandas.py $DATASET_FOLDER 1 daal
-echo Measuring with XGBoost
+
+echo ''
+echo -------------/ Measuring with XGBoost /-------------
+echo ''
 time python mortgage_pandas.py $DATASET_FOLDER 1 xgb
 
