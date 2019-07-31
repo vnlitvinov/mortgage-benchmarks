@@ -2,7 +2,7 @@
 set -e
 source ./prereq_install.sh
 
-conda env create -f ./requirements_gpu.yml
+conda env list | grep -q mortgage_gpu || conda env create -f ./requirements_gpu.yml
 conda activate mortgage_gpu
 
 echo ''
