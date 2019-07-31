@@ -10,13 +10,10 @@ Based on [benchmarks published by NVidia for their RAPIDS](https://render.github
 - login in it
 - follow [the steps](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#Cluster_GPUs_Manual_Install_Driver) to install the necessary driver for V100 GPU (using 396.82 version)
 - `git clone https://github.com/vnlitvin/mortgage-benchmarks.git && cd mortgage-benchmarks`
-- `. ./prepare_gpu.sh`
-- `time python Mortgage_GPU.py  test_mortgage/mortgage_dataset/ 1`
+- `./run_gpu.sh`
 
 ## CPU case with using pandas upstream
 - launch `c5.18xlarge` cpu instance on AWS cloud with `Ubuntu Server 18.04 LTS (HVM), SSD Volume Type` image
 - login in it
 - `git clone https://github.com/vnlitvin/mortgage-benchmarks.git && cd mortgage-benchmarks`
-- `. ./prepare_cpu.sh`
-- `time python mortgage_pandas.py test_mortgage/mortgage_dataset/ 1 daal` or
-  `time python mortgage_pandas.py test_mortgage/mortgage_dataset/ 1 xgb`
+- `./run_cpu.sh`
