@@ -1,0 +1,12 @@
+name: mortgage_cpu
+channels:
+- conda-forge
+- intel
+- defaults
+dependencies:
+- python=3.6
+- daal4py
+- pip
+- pip:
+  - xgboost
+  - pandas>=0.25
