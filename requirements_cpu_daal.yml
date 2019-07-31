@@ -6,8 +6,7 @@ channels:
 dependencies:
 - python=3.6
 - daal4py
-- cython
-- numpy=1.16.2
 - pip
 - pip:
   - xgboost
+  - pandas
