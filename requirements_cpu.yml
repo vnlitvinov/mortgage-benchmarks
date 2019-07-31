@@ -1,4 +1,4 @@
-name: mortgage_cpu_daal
+name: mortgage_cpu
 channels:
 - conda-forge
 - intel

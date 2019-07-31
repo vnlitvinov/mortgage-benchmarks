@@ -4,15 +4,15 @@ set -e
 # prepare conda tool, mortgage dataset
 source ./prereq_install.sh
 
-conda env list | grep -q mortgage_cpu_daal || conda env create -f requirements_cpu_daal.yml
-echo "env mortgage_cpu_daal is created"
+conda env list | grep -q mortgage_cpu || conda env create -f requirements_cpu.yml
+echo "env mortgage_cpu is created"
 
-conda activate mortgage_cpu_daal
-echo "mortgage_cpu_daal is activated"
+conda activate mortgage_cpu
+echo "mortgage_cpu is activated"
 
 
 # for build pandas from source uncomment the block below and
-# add next lines to 'requirements_cpu_daal.yml':
+# add next lines to 'requirements_cpu.yml':
 # - cython
 # - numpy=1.16.2
 
